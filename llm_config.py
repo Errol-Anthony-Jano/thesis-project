@@ -1,0 +1,7 @@
+MODEL_NAME = "deepseek-coder:1.3b"
+MAX_REPAIR_TURNS = 3
+SANDBOX_TIMEOUT = 30
+OUTPUT_DIR = "generated_tests"
+OLLAMA_API_URL = "http://localhost:11434/api/generate"
+MAX_GENERATION_TOKENS = 1024
+CONTEXT_WINDOW = 4096
