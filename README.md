@@ -22,3 +22,4 @@ This will automatically download the model for you. After installing, it will ru
 * Linux/macOS: ```source venv/bin/activate```
 * Windows: ```venv\Scripts\activate```
 4. Install the requirements via ```pip install -r requirements.txt```. 
+5. Run the program through ```main.py``` using the ```python main.py``` command (or anything similar).

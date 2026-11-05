@@ -1,5 +1,5 @@
 import requests
-from llm_config import MODEL_NAME, OLLAMA_API_URL, MAX_GENERATION_TOKENS, CONTEXT_WINDOW
+from llm_config import MODEL_NAME, OLLAMA_API_URL, MAX_GENERATION_TOKENS, CONTEXT_WINDOW, TIMEOUT
 
 # Defines the abstraction that allows the user to interact with the LLM model through a simple interface.
 def query_llm(prompt: str, temperature: float = 0.0) -> str:
@@ -26,12 +26,13 @@ def query_llm(prompt: str, temperature: float = 0.0) -> str:
     }
 
     try:
-        res = requests.post(OLLAMA_API_URL, json=payload, timeout=120)
+        res = requests.post(OLLAMA_API_URL, json=payload, timeout=TIMEOUT)
         res.raise_for_status()
         raw_text = res.json().get("response", "")
         return extract_code_block(raw_text)
     except Exception as e:
         print(f"[LLM Client Error] Failed to reach Ollama: {e}")
+        return ""
 
 def extract_code_block(text: str) -> str:
     if "```python" in text:
