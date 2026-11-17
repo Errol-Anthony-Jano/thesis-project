@@ -10,7 +10,7 @@
 1. Install Ollama from https://ollama.com/download; follow the instructions.
 2. From your terminal, execute the following command:
 
-```ollama run deepseek-coder:1.3b```
+```ollama run qwen2.5:3b```
 
 This will automatically download the model for you. After installing, it will run automatically.
 
@@ -23,3 +23,11 @@ This will automatically download the model for you. After installing, it will ru
 * Windows: ```venv\Scripts\activate```
 4. Install the requirements via ```pip install -r requirements.txt```. 
 5. Run the program through ```main.py``` using the ```python main.py``` command (or anything similar).
+
+### Test Generation
+Each function is sent through a multi-turn chat by default: the first turn
+requests one pytest test, and each later turn includes the earlier conversation
+and asks for a distinct test. The number of tests per function is controlled by
+`NUM_GENERATION_ROUNDS` in `llm_config.py`. Generated test code is stored in
+order in the task records returned by the pipeline and combined in each
+function's output file.

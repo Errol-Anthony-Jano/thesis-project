@@ -1,10 +1,11 @@
 # beta version: no feedback loop yet
 import json
-from generation_pipeline import run_generation_pipeline
+from generation_pipeline_new import run_generation_pipeline
 
 list = []
 
-with open("./datasets/ULT_Lite.jsonl", "r") as file:
+# start the llm
+with open("./datasets/ULT.jsonl", "r") as file:
     data = json.load(file)
     list = data[:10]
 

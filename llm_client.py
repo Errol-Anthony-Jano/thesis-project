@@ -1,43 +1,94 @@
 import requests
-from llm_config import MODEL_NAME, OLLAMA_API_URL, MAX_GENERATION_TOKENS, CONTEXT_WINDOW, TIMEOUT
+import re
+from llm_config import (
+    CONTEXT_WINDOW,
+    MAX_GENERATION_TOKENS,
+    OLLAMA_CHAT_API,
+    QWEN_3B_MODEL,
+    TIMEOUT,
+)
+from prompts.test_generation_prompt import SYSTEM_PROMPT, build_generation_prompt
 
 # Defines the abstraction that allows the user to interact with the LLM model through a simple interface.
-def query_llm(prompt: str, temperature: float = 0.0) -> str:
-    """
-    Queries the LLM model with the given prompt and returns the response.
 
-    Args:
-        prompt (str): The input prompt to send to the LLM model.
-        model_name (str): The name of the LLM model to use for querying.
 
-    Returns:
-        str: The response from the LLM model.
+def query_llm(
+    fn_code: str,
+    fn_name: str,
+    fn_desc: str,
+    temperature: float = 0.0,
+    *,
+    messages: list[dict[str, str]] | None = None,
+) -> str:
     """
-    
+    Query Ollama's chat endpoint and return the complete assistant response.
+    """
+
+    if messages is None:
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": build_generation_prompt(fn_code, fn_desc, fn_name),
+            },
+        ]
+
     payload = {
-        "model": MODEL_NAME,
-        "prompt": prompt,
+        "model": QWEN_3B_MODEL,
+        "messages": messages,
         "stream": False,
         "options": {
             "temperature": temperature,
             "num_predict": MAX_GENERATION_TOKENS,
-            "num_ctx": CONTEXT_WINDOW
-        }
+            "num_ctx": CONTEXT_WINDOW,
+        },
     }
 
-    try:
-        res = requests.post(OLLAMA_API_URL, json=payload, timeout=TIMEOUT)
-        res.raise_for_status()
-        raw_text = res.json().get("response", "")
-        return extract_code_block(raw_text)
-    except Exception as e:
-        print(f"[LLM Client Error] Failed to reach Ollama: {e}")
-        return ""
+    response = requests.post(OLLAMA_CHAT_API, json=payload, timeout=TIMEOUT)
+    response.raise_for_status()
+    response_data = response.json()
+    if not isinstance(response_data, dict):
+        raise ValueError("Unexpected Ollama response shape: expected a JSON object")
+
+    message = response_data.get("message")
+    if isinstance(message, dict) and isinstance(message.get("content"), str):
+        return message["content"]
+    if isinstance(response_data.get("response"), str):
+        return response_data["response"]
+    raise ValueError("Unexpected Ollama response shape: expected message.content")
+
+def query_llm_fix_code(messages, temperature = 0.0):
+    payload = {
+        "model": QWEN_3B_MODEL,
+        "messages": messages,
+        "stream": False,
+        "options": {
+            "temperature": temperature,
+            "num_predict": MAX_GENERATION_TOKENS,
+            "num_ctx": CONTEXT_WINDOW,
+        },
+    }
+
+    response = requests.post(OLLAMA_CHAT_API, json=payload, timeout=TIMEOUT)
+    response.raise_for_status()
+    response_data = response.json()
+    if not isinstance(response_data, dict):
+        raise ValueError("Unexpected Ollama response shape: expected a JSON object")
+
+    message = response_data.get("message")
+    if isinstance(message, dict) and isinstance(message.get("content"), str):
+        return message["content"]
+    if isinstance(response_data.get("response"), str):
+        return response_data["response"]
+    raise ValueError("Unexpected Ollama response shape: expected message.content")
 
 def extract_code_block(text: str) -> str:
-    if "```python" in text:
-        text = text.split("```python")[1].split("```")[0]
-    elif "```" in text:
-        text = text.split("```")[1].split("```")[0]
+    fenced_code = re.search(
+        r"```(?:python|py)?[ \t]*\r?\n(.*?)```",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if fenced_code:
+        text = fenced_code.group(1)
 
     return text.strip()
