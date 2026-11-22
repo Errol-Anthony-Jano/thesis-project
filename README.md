@@ -38,6 +38,14 @@ entire dataset, for example:
 python main.py --dataset leetcode-py-all --limit 0
 ```
 
+By default, each record uses multi-turn generation. Add `--single-generation`
+to request a complete suite in one model call. This mode allows multiple test
+functions in that response and disables the Ollama output-token cap:
+
+```powershell
+python main.py --dataset leetcode-py-all --single-generation
+```
+
 LeetCode test files are saved in `generated_tests/` with their task number in
 the filename so records sharing a function name do not overwrite each other.
 

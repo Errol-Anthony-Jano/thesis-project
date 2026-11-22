@@ -19,6 +19,7 @@ def query_llm(
     temperature: float = 0.0,
     *,
     messages: list[dict[str, str]] | None = None,
+    max_generation_tokens: int | None = MAX_GENERATION_TOKENS,
 ) -> str:
     """
     Query Ollama's chat endpoint and return the complete assistant response.
@@ -39,7 +40,9 @@ def query_llm(
         "stream": False,
         "options": {
             "temperature": temperature,
-            "num_predict": MAX_GENERATION_TOKENS,
+            "num_predict": (
+                max_generation_tokens if max_generation_tokens is not None else -1
+            ),
             "num_ctx": CONTEXT_WINDOW,
         },
     }
@@ -57,14 +60,20 @@ def query_llm(
         return response_data["response"]
     raise ValueError("Unexpected Ollama response shape: expected message.content")
 
-def query_llm_fix_code(messages, temperature = 0.0):
+def query_llm_fix_code(
+    messages,
+    temperature=0.0,
+    max_generation_tokens: int | None = MAX_GENERATION_TOKENS,
+):
     payload = {
         "model": QWEN_3B_MODEL,
         "messages": messages,
         "stream": False,
         "options": {
             "temperature": temperature,
-            "num_predict": MAX_GENERATION_TOKENS,
+            "num_predict": (
+                max_generation_tokens if max_generation_tokens is not None else -1
+            ),
             "num_ctx": CONTEXT_WINDOW,
         },
     }

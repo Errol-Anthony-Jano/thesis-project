@@ -42,6 +42,11 @@ def main(argv: list[str] | None = None) -> None:
         default=10,
         help="Maximum records to process; use 0 to process the entire dataset",
     )
+    parser.add_argument(
+        "--single-generation",
+        action="store_true",
+        help="Generate a complete test suite in one model call per record",
+    )
     args = parser.parse_args(argv)
     if args.limit < 0:
         parser.error("--limit must be 0 or greater")
@@ -53,9 +58,15 @@ def main(argv: list[str] | None = None) -> None:
     selected_records = records[: args.limit] if args.limit else records
 
     if args.dataset == "leetcode-py-all":
-        run_leetcode_generation_pipeline(selected_records)
+        run_leetcode_generation_pipeline(
+            selected_records,
+            single_generation=args.single_generation,
+        )
     else:
-        run_generation_pipeline(selected_records)
+        run_generation_pipeline(
+            selected_records,
+            single_generation=args.single_generation,
+        )
 
 
 if __name__ == "__main__":

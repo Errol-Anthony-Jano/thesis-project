@@ -14,16 +14,28 @@ from tqdm import tqdm
 import tempfile
 
 from llm_client import extract_code_block, query_llm, query_llm_fix_code
-from llm_config import NUM_GENERATION_ROUNDS, OUTPUT_DIR, SYNTAX_FIX_MAX_TRIES
+from llm_config import (
+    MAX_GENERATION_TOKENS,
+    NUM_GENERATION_ROUNDS,
+    OUTPUT_DIR,
+    SYNTAX_FIX_MAX_TRIES,
+)
 from prompts.test_generation_prompt import (
+    SINGLE_GENERATION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_follow_up_prompt,
     build_generation_prompt,
+    build_single_generation_prompt,
 )
 from prompts.syntax_fix_prompt import repair_code
 
 
-def run_generation_pipeline(functions, num_tests=NUM_GENERATION_ROUNDS):
+def run_generation_pipeline(
+    functions,
+    num_tests=NUM_GENERATION_ROUNDS,
+    *,
+    single_generation=False,
+):
     if num_tests < 1:
         raise ValueError("num_tests must be at least 1")
 
@@ -37,25 +49,45 @@ def run_generation_pipeline(functions, num_tests=NUM_GENERATION_ROUNDS):
         messages = [
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT,
+                "content": (
+                    SINGLE_GENERATION_SYSTEM_PROMPT
+                    if single_generation
+                    else SYSTEM_PROMPT
+                ),
             },
             {
                 "role": "user",
-                "content": build_generation_prompt(
-                    function_code, function_desc, function_name
+                "content": (
+                    build_single_generation_prompt(
+                        function_code, function_desc, function_name
+                    )
+                    if single_generation
+                    else build_generation_prompt(
+                        function_code, function_desc, function_name
+                    )
                 ),
             },
         ]
 
-        for round_number in tqdm(range(num_tests)):
+        generation_rounds = 1 if single_generation else num_tests
+        for round_number in tqdm(range(generation_rounds)):
             print(f"Generating test #{round_number} for function {function_name}")
 
-            llm_response = query_llm(
-                function_code,
-                function_name,
-                function_desc,
-                messages=messages,
-            )
+            if single_generation:
+                llm_response = query_llm(
+                    function_code,
+                    function_name,
+                    function_desc,
+                    messages=messages,
+                    max_generation_tokens=None,
+                )
+            else:
+                llm_response = query_llm(
+                    function_code,
+                    function_name,
+                    function_desc,
+                    messages=messages,
+                )
             test_code = extract_code_block(llm_response)
             if not test_code:
                 raise ValueError(
@@ -68,7 +100,12 @@ def run_generation_pipeline(functions, num_tests=NUM_GENERATION_ROUNDS):
             except SyntaxError as error:
                 print(f"Syntax error by generated test for {function_name}. Entering repair loop.")
                 test_code = run_syntax_error_fix_loop(
-                    test_code, SYNTAX_FIX_MAX_TRIES, error
+                    test_code,
+                    SYNTAX_FIX_MAX_TRIES,
+                    error,
+                    max_generation_tokens=(
+                        None if single_generation else MAX_GENERATION_TOKENS
+                    ),
                 )
                 parsed_test = ast.parse(test_code)
 
@@ -78,7 +115,20 @@ def run_generation_pipeline(functions, num_tests=NUM_GENERATION_ROUNDS):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and node.name.startswith("test_")
             ]
-            if len(test_functions) != 1:
+            if single_generation:
+                if not test_functions:
+                    raise ValueError(
+                        f"Ollama must return at least one pytest test function "
+                        f"for {function_name} on generation round "
+                        f"{round_number + 1}"
+                    )
+                if len(test_functions) != len(set(test_functions)):
+                    raise ValueError(
+                        f"Ollama repeated a test function name for "
+                        f"{function_name} on generation round "
+                        f"{round_number + 1}"
+                    )
+            elif len(test_functions) != 1:
                 raise ValueError(
                     f"Ollama must return exactly one pytest test function for "
                     f"{function_name} on generation round {round_number + 1}"
@@ -105,7 +155,12 @@ def run_generation_pipeline(functions, num_tests=NUM_GENERATION_ROUNDS):
     return functions
 
 
-def run_syntax_error_fix_loop(function, num_tries, error):
+def run_syntax_error_fix_loop(
+    function,
+    num_tries,
+    error,
+    max_generation_tokens: int | None = MAX_GENERATION_TOKENS,
+):
     fixed_test = function
     fix_error = error
     for _ in tqdm(range(num_tries)):
@@ -124,7 +179,13 @@ def run_syntax_error_fix_loop(function, num_tries, error):
             },
         ]
 
-        fixed_test = extract_code_block(query_llm_fix_code(messages, 0.0))
+        fixed_test = extract_code_block(
+            query_llm_fix_code(
+                messages,
+                0.0,
+                max_generation_tokens=max_generation_tokens,
+            )
+        )
         if not fixed_test:
             continue
 

@@ -7,15 +7,19 @@ from tqdm import tqdm
 from llm_client import extract_code_block, query_llm
 from llm_config import NUM_GENERATION_ROUNDS, OUTPUT_DIR
 from prompts.test_generation_prompt import (
+    SINGLE_GENERATION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_follow_up_prompt,
     build_generation_prompt,
+    build_single_generation_prompt,
 )
 
 
 def run_leetcode_generation_pipeline(
     tasks: list[dict[str, Any]],
     num_tests: int = NUM_GENERATION_ROUNDS,
+    *,
+    single_generation: bool = False,
 ) -> list[dict[str, Any]]:
     if num_tests < 1:
         raise ValueError("num_tests must be at least 1")
@@ -47,24 +51,47 @@ def run_leetcode_generation_pipeline(
             "instantiate it with `Solution()` in the tests."
         )
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "system",
+                "content": (
+                    SINGLE_GENERATION_SYSTEM_PROMPT
+                    if single_generation
+                    else SYSTEM_PROMPT
+                ),
+            },
             {
                 "role": "user",
-                "content": build_generation_prompt(
-                    function_code, prompt_description, function_name
+                "content": (
+                    build_single_generation_prompt(
+                        function_code, prompt_description, function_name
+                    )
+                    if single_generation
+                    else build_generation_prompt(
+                        function_code, prompt_description, function_name
+                    )
                 ),
             },
         ]
         generated_tests: list[str] = []
         test_names: set[str] = set()
 
-        for round_number in range(num_tests):
-            response = query_llm(
-                function_code,
-                function_name,
-                prompt_description,
-                messages=messages,
-            )
+        generation_rounds = 1 if single_generation else num_tests
+        for round_number in range(generation_rounds):
+            if single_generation:
+                response = query_llm(
+                    function_code,
+                    function_name,
+                    prompt_description,
+                    messages=messages,
+                    max_generation_tokens=None,
+                )
+            else:
+                response = query_llm(
+                    function_code,
+                    function_name,
+                    prompt_description,
+                    messages=messages,
+                )
             test_code = extract_code_block(response)
             if not test_code:
                 raise ValueError(
@@ -85,7 +112,19 @@ def run_leetcode_generation_pipeline(
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and node.name.startswith("test_")
             ]
-            if len(test_functions) != 1:
+            if single_generation:
+                if not test_functions:
+                    raise ValueError(
+                        f"Ollama must return at least one pytest test function "
+                        f"for task {task_num} on generation round "
+                        f"{round_number + 1}"
+                    )
+                if len(test_functions) != len(set(test_functions)):
+                    raise ValueError(
+                        f"Ollama repeated a test function name for task "
+                        f"{task_num} on generation round {round_number + 1}"
+                    )
+            elif len(test_functions) != 1:
                 raise ValueError(
                     f"Ollama must return exactly one pytest test function for "
                     f"task {task_num} on generation round {round_number + 1}"
