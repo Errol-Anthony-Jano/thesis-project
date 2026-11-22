@@ -22,7 +22,24 @@ This will automatically download the model for you. After installing, it will ru
 * Linux/macOS: ```source venv/bin/activate```
 * Windows: ```venv\Scripts\activate```
 4. Install the requirements via ```pip install -r requirements.txt```. 
-5. Run the program through ```main.py``` using the ```python main.py``` command (or anything similar).
+5. Run the program through `main.py`:
+
+```powershell
+python main.py --dataset ULT
+```
+
+Choose `ULT`, `ULT_Lite`, or `leetcode-py-all` with `--dataset`. The first two
+datasets use the existing generation pipeline; `leetcode-py-all` uses a
+separate pipeline that reads its `python_solution` and `description` fields.
+By default, the first 10 records are processed. Set `--limit 0` to process the
+entire dataset, for example:
+
+```powershell
+python main.py --dataset leetcode-py-all --limit 0
+```
+
+LeetCode test files are saved in `generated_tests/` with their task number in
+the filename so records sharing a function name do not overwrite each other.
 
 ### Test Generation
 Each function is sent through a multi-turn chat by default: the first turn
